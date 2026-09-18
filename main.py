@@ -1,5 +1,6 @@
 import os
 import time
+import requests
 import feedparser
 import google.generativeai as genai
 
@@ -30,27 +31,57 @@ def generate_blog_post(title, summary):
     Requirements:
     1. First, write the complete article in professional ENGLISH (Headline, Key Points, Analysis, Conclusion).
     2. Next, write the complete article in professional URDU (عنوان، اہم نکات، تجزیہ، خلاصہ).
-    3. End the entire post with this strict founder branding credit in BOTH languages:
-       
-       ---
-       **Global Freedom Engine**
-       *Founder & Visionary:* **Ismail Marri**
-       
-       **گلوبل فریڈوم انجن**
-       *بانی:* **اسماعیل مری**
+    
+    Format the output strictly as a JSON object with two keys: "english_content" and "urdu_content". The values should be the formatted HTML for each.
     """
     
     for attempt in range(3):
         try:
             response = model.generate_content(prompt)
-            return response.text
+            # Find JSON start and end
+            content_text = response.text
+            start = content_text.find('{')
+            end = content_text.rfind('}') + 1
+            if start != -1 and end != -1:
+                return content_text[start:end]
+            return None
         except Exception as e:
             time.sleep(2 ** attempt)
     return None
 
+def update_website(ai_data_json):
+    import json
+    try:
+        data = json.loads(ai_data_json)
+        urdu_news = data['urdu_content']
+        english_news = data['english_content']
+        
+        # Read the current index.html
+        with open("index.html", "r", encoding="utf-8") as f:
+            html_content = f.read()
+            
+        # Replace the placeholders with the actual news
+        # Ensure your index.html has these IDs: latest-news-urdu and latest-news-english
+        new_html = html_content.replace('<div id="latest-news-urdu">جیمنائی سے خبر جنریٹ ہو رہی ہے... (صبح 6 بجے اپ ڈیٹ ہوگی)</div>', f'<div id="latest-news-urdu">{urdu_news}</div>')
+        new_html = new_html.replace('<div id="latest-news-english">Gemini is generating news... (Will update at 6 AM)</div>', f'<div id="latest-news-english">{english_news}</div>')
+        
+        # Write the updated HTML back to index.html
+        with open("index.html", "w", encoding="utf-8") as f:
+            f.write(new_html)
+        print("index.html successfully updated!")
+    except Exception as e:
+        print(f"Error updating website: {e}")
+
 if __name__ == "__main__":
     title, summary = get_latest_news()
     if title and summary:
-        post_content = generate_blog_post(title, summary)
-        print("Generated Article Output:")
-        print(post_content)
+        print("Generating News...")
+        ai_data = generate_blog_post(title, summary)
+        if ai_data:
+            print("Updating index.html...")
+            update_website(ai_data)
+        else:
+            print("Failed to generate AI content.")
+    else:
+        print("No news found in the feed.")
+
